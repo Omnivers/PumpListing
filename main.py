@@ -10,6 +10,25 @@ class TokenMonitor:
         self.websocket_uri = "wss://pumpportal.fun/api/data"
         self.processed_tokens = set()
 
+    def get_relative_time(self, created_at):
+        """Calculate relative time from creation date"""
+        now = datetime.now(timezone.utc)
+        diff = now - created_at
+        
+        seconds = diff.total_seconds()
+        
+        if seconds < 60:
+            return f"il y a {int(seconds)}s"
+        elif seconds < 3600:
+            minutes = int(seconds / 60)
+            return f"il y a {minutes}m"
+        elif seconds < 86400:
+            hours = int(seconds / 3600)
+            return f"il y a {hours}h"
+        else:
+            days = int(seconds / 86400)
+            return f"il y a {days}j"
+
     def format_token_info(self, token_data):
         """Format token information from websocket data"""
         try:
@@ -20,10 +39,16 @@ class TokenMonitor:
             market_cap_usd = token_data.get('marketCapSol', 0) * sol_price
             liquidity_usd = token_data.get('vSolInBondingCurve', 0) * sol_price
             
+            # Create bullx.io terminal link
+            mint_address = token_data.get('mint', '')
+            bullx_link = f"https://bullx.io/terminal?chainId=1399811149&address={mint_address}"
+            
+            created_at = datetime.now(timezone.utc)
+            
             return {
                 'name': token_data.get('name', 'Unknown'),
                 'symbol': token_data.get('symbol', 'Unknown'),
-                'mint_address': token_data.get('mint', ''),
+                'mint_address': mint_address,
                 'chain': 'Solana',
                 'initial_buy': token_data.get('initialBuy', 0),
                 'market_cap_sol': token_data.get('marketCapSol', 0),
@@ -31,10 +56,11 @@ class TokenMonitor:
                 'liquidity_sol': token_data.get('vSolInBondingCurve', 0),
                 'liquidity_usd': liquidity_usd,
                 'tokens_in_curve': token_data.get('vTokensInBondingCurve', 0),
-                'creator': token_data.get('traderPublicKey', ''),
+                'bullx_link': bullx_link,
                 'tx_signature': token_data.get('signature', ''),
-                'uri': token_data.get('uri', ''),
-                'created_at': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+                'holders_count': token_data.get('holdersCount', 'N/A'),
+                'liquidity_burned': token_data.get('liquidityBurned', False),
+                'created_at': created_at
             }
 
         except Exception as e:
@@ -46,18 +72,21 @@ class TokenMonitor:
         if not token_data:
             return
 
+        relative_time = self.get_relative_time(token_data['created_at'])
+
         print("\n" + "="*60)
         print(f"🔥 NOUVEAU TOKEN SOLANA DÉTECTÉ 🔥")
         print(f"Nom: {token_data['name']} ({token_data['symbol']})")
-        print(f"Mint Address: {token_data['mint_address']}")
+        print(f"Address: {token_data['mint_address']}")
         print(f"Market Cap: {token_data['market_cap_sol']:.3f} SOL (${token_data['market_cap_usd']:,.2f})")
         print(f"Liquidité: {token_data['liquidity_sol']:.3f} SOL (${token_data['liquidity_usd']:,.2f})")
         print(f"Initial Buy: {token_data['initial_buy']:,.0f} tokens")
         print(f"Tokens in Curve: {token_data['tokens_in_curve']:,.0f}")
-        print(f"Créateur: {token_data['creator']}")
+        print(f"Nombre de Holders: {token_data['holders_count']}")
+        print(f"Bullx Terminal: {token_data['bullx_link']}")
         print(f"Transaction: {token_data['tx_signature']}")
-        print(f"Metadata URI: {token_data['uri']}")
-        print(f"Créé le: {token_data['created_at']}")
+        print(f"Liquidité Brûlée: {'Oui' if token_data['liquidity_burned'] else 'Non'}")
+        print(f"Créé {relative_time}")
         print("="*60 + "\n")
 
     async def monitor_tokens(self):
